@@ -30,7 +30,7 @@ Mode MODE = MODE_CIRCLE_WAVE_RAINBOW;
 uint32_t lastIrCode = 0;
 int repeatCount = 0;
 unsigned long lastIrTime = 0;
-const unsigned long repeatTimeout = 200; // Time in ms to wait for a repeat
+const unsigned long repeatTimeout = 150; // Time in ms to wait for a repeat
 
 
 // Animation specific:
@@ -39,20 +39,26 @@ static uint8_t chaserStartIndex = 0;
 
 void setup()
 {
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(250);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(250);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(250);
+    digitalWrite(LED_BUILTIN, LOW);
+
     FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
     FastLED.setBrightness(10);
 
     Serial.begin(115200);
-    while (!Serial)
+    // while (!Serial)
         ; // Wait for the serial port to connect.
 
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Start the IR receiver
     Serial.println(F("\n\nIR Receiver and FastLED are initialized."));
 
     selectPalette(11);
-
-    pinMode(ledPin, OUTPUT);
-    digitalWrite(ledPin, HIGH);
 }
 
 void loop()
