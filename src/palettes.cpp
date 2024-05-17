@@ -178,7 +178,7 @@ void selectPalette(uint8_t index)
 {
 	switch(index)
     {
-        case 0: { currentPalette = myRastaPalette_p; currentBlending = LINEARBLEND; } break;
+    case 0: { currentPalette = myRastaPalette_p; currentBlending = LINEARBLEND; } break;
 		case 1: { SetupPurpleAndGreenPalette(); currentBlending = LINEARBLEND; }break;
 		case 2: { currentPalette = myRedBluePalette_p; currentBlending = LINEARBLEND; }break;
 		case 3: { SetupBlackAndWhiteStripedPalette(); currentBlending = LINEARBLEND; }break;
@@ -186,14 +186,14 @@ void selectPalette(uint8_t index)
 		case 5: { SetupPurplePalette(); currentBlending = LINEARBLEND; }break;
 		case 6: { currentPalette = CloudColors_p; currentBlending = LINEARBLEND; }break;
 		case 7: { SetupPastelPalette(); currentBlending = LINEARBLEND; }break;
-        case 8: { currentPalette = RainbowColors_p; currentBlending = LINEARBLEND; }break;
-        case 9: { currentPalette = LavaColors_p; currentBlending = LINEARBLEND; }break;
-        case 10: { SetupKaskadePalette(); currentBlending = LINEARBLEND; }break;
-        case 11: { currentPalette = ForestColors_p; currentBlending = LINEARBLEND; }break;
-        default: {currentPaletteIndex = 0; 
-				  Serial.println("Invalid palette request, setting to 0");
-				  selectPalette(currentPaletteIndex);}break;
-	}                          
+    case 8: { currentPalette = RainbowColors_p; currentBlending = LINEARBLEND; }break;
+    case 9: { currentPalette = LavaColors_p; currentBlending = LINEARBLEND; }break;
+    case 10: { SetupKaskadePalette(); currentBlending = LINEARBLEND; }break;
+    case 11: { currentPalette = ForestColors_p; currentBlending = LINEARBLEND; }break;
+    default: {currentPaletteIndex = 0; 
+      Serial.println("Invalid palette request, setting to 0");
+      selectPalette(currentPaletteIndex);}break;
+}                          
 }
 
 void ChangePalettePeriodically(bool isRandom = false)

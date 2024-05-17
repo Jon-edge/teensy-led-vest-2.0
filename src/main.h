@@ -22,7 +22,7 @@
 
 // Additional button definitions for controls
 #define BRT_UP   0xF609FF00
-#define BRT_DN   0xE21DFF00
+#define BRT_DOWNN   0xE21DFF00
 #define OFF      0xE01FFF00
 #define ON       0xF20DFF00
 #define FLASH    0xB24DFF00
@@ -43,4 +43,4 @@ extern bool isAutoPaletteCycle;
 // set pin numbers:
 extern const uint8_t ledPin;      // the number of the onboard LED pin
 
-void handleIrSignal(uint32_t code);
+void handleIrSignal(uint32_t code, int repeats);

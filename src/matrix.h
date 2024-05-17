@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 #include <FastLED.h>
+#include "main.h"
 
 #define NUM_LEDS 193
 #define LED_PIN 6            // Data pin for LED strip
@@ -19,7 +20,6 @@ extern uint8_t len[17];
 extern uint8_t preDeadZone[17];
 
 // Control
-extern uint8_t MODE;
 extern uint8_t BRIGHTNESS;
 extern uint8_t brightness[9];
 extern uint8_t brightnessIndex;

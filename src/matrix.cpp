@@ -13,7 +13,6 @@ uint8_t len[17] =       { 7, 9, 10, 12, 13, 13, 13, 13, 13, 13, 13, 13, 13, 12, 
 uint8_t preDeadZone[17]={ 2, 3,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  2,  1,  4};
 
 // Control
-uint8_t MODE = 0;
 uint8_t BRIGHTNESS = 255;
 uint8_t brightness[9] = {30, 50, 75, 100, 125, 150, 175, 200, 255};
 uint8_t brightnessIndex = 6;
