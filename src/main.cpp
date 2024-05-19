@@ -21,6 +21,7 @@ enum Mode
     MODE_ROTATING_RAINBOW,
     MODE_CHASERS,
     MODE_TWINKLE,
+    MODE_SPARKLE,
     MODE_COUNT // This helps to know the count of modes
 };
 Mode MODE = MODE_CIRCLE_WAVE_RAINBOW;
@@ -31,11 +32,11 @@ uint32_t lastIrCode = 0;
 int repeatCount = 0;
 unsigned long lastIrTime = 0;
 const unsigned long repeatTimeout = 150; // Time in ms to wait for a repeat
-
+bool newSignal = false;
 
 // Animation specific:
 volatile int animationSpeed = INITIAL_SPEED; // Animation delay in milliseconds, start with initial speed
-static uint8_t chaserStartIndex = 0;
+static uint8_t lgcyColorIndex = 0;
 
 void setup()
 {
@@ -64,33 +65,40 @@ void setup()
 void loop()
 {
     unsigned long ms = millis();
- // Handle IR signals
+    
+    // Handle IR signals
     if (IrReceiver.decode())
     {
+        newSignal = true;
         uint32_t code = IrReceiver.decodedIRData.decodedRawData;
 
-        if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)
-        {
-            int repeatMs = ms - lastIrTime;
-            Serial.println("Repeat of last command " + String(repeatMs));
-            repeatCount++;
-        }
-        else
-        {
-            Serial.print(F("Received new IR signal: 0x"));
-            Serial.println(code, HEX);
+        if (code != 0) {
+            if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)
+            {
+                int repeatMs = ms - lastIrTime;
+                Serial.println("Repeat of last command " + String(repeatMs));
+                repeatCount++;
+            }
+            else
+            {
+                Serial.print(F("Received new IR signal: 0x"));
+                Serial.println(code);
 
-            lastIrCode = code;
-            repeatCount = 0;
-        }
+                lastIrCode = code;
+                repeatCount = 0;
+            }
 
-        lastIrTime = ms;
-
+            lastIrTime = ms;
+        } 
+        else {
+            //Serial.println("ignoring code");
+        } 
         IrReceiver.resume(); // Prepare for receiving the next IR signal.
     }
     else
     {
-        if (ms - lastIrTime > repeatTimeout) {
+        if (newSignal && ms - lastIrTime > repeatTimeout) {
+            newSignal = false;
             // We're sure this is the press meaning
             handleIrSignal(lastIrCode, repeatCount);
             repeatCount = 0;
@@ -103,36 +111,23 @@ void loop()
 
         switch (MODE)
         {
-        case MODE_CIRCLE_WAVE_RAINBOW:
-        {
-            circleWaveRainbow();
-        }
+        case MODE_CIRCLE_WAVE_RAINBOW: circleWaveRainbow(); break;
         break;
-        case MODE_ROTATING_RAINBOW:
-        {
+        case MODE_ROTATING_RAINBOW: {
             int32_t yHueDelta32 = ((int32_t)sin16(ms * (27 / 1)) * (350 / LED_WIDTH));
             int32_t xHueDelta32 = ((int32_t)sin16(ms * (39 / 1)) * (310 / LED_HEIGHT));
             RotatingRainbow(ms / 65536, yHueDelta32 / 32768, xHueDelta32 / 32768);
-        }
-        break;
-        case MODE_CHASERS:
-        {
+        } break;
+        case MODE_CHASERS: {
             EVERY_N_MILLISECONDS(animationSpeed)
             {
-                chaserStartIndex = chaserStartIndex + 1; /* motion speed */
+                lgcyColorIndex = lgcyColorIndex + 1; /* motion speed */
             }
-            FillLEDsFromPaletteColors(chaserStartIndex);
-        }
-        break;
-        case MODE_TWINKLE:
-        {
-            colortwinkles(animationSpeed);
-        }
-        break;
-        case MODE_COUNT:
-        {
-            MODE=MODE_CIRCLE_WAVE_RAINBOW;
-        }break;
+            FillLEDsFromPaletteColors(lgcyColorIndex);
+        } break;
+        case MODE_TWINKLE: colortwinkles(animationSpeed); break;
+        case MODE_SPARKLE: sparkle(10, lgcyColorIndex); break;
+        case MODE_COUNT: MODE=MODE_CIRCLE_WAVE_RAINBOW; break;
         }
     }
 
@@ -143,6 +138,7 @@ void handleIrSignal(uint32_t code, int repeats)
 {
     if (repeats >= 3)
     {
+        Serial.println("Handling repeat code: " + String(code));
         // Handle the command differently if it's repeated 3 times
         switch (code)
         {
@@ -247,6 +243,7 @@ void handleIrSignal(uint32_t code, int repeats)
     else
     {
         // Handle each color command based on the received IR signal
+        Serial.println("Handling normal code: " + String(code));
         switch (code)
         {
         case RED_0:
@@ -298,12 +295,16 @@ void handleIrSignal(uint32_t code, int repeats)
             leds[5] = CRGB::White;
             break;
         case BRT_UP:
-            if (brightnessIndex < 9)
-                brightnessIndex++;
+            if (brightnessIndex < 8) {
+                brightnessIndex++; 
+                Serial.println("Brightness " + String(brightnessIndex));
+            }
             break;
         case BRT_DOWNN:
-            if (brightnessIndex > 0)
+            if (brightnessIndex > 0){
                 brightnessIndex--;
+                Serial.println("Brightness " + String(brightnessIndex));
+            }
             break;
         case OFF:
             MODE = MODE_COUNT;
