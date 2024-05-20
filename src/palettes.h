@@ -15,7 +15,7 @@ extern const TProgmemPalette16 myRedBluePalette_p PROGMEM;
 extern const TProgmemPalette16 myRastaPalette_p PROGMEM;
 extern const TProgmemPalette16 myCostumePalette_p PROGMEM;
 
-void SetupBlackAndWhiteStripedPalette();
+void SetupAmericaPalette();
 void SetupHeavenPalette();
 void SetupPurpleAndGreenPalette();
 void SetupKaskadePalette();

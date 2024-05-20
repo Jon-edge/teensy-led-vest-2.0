@@ -8,14 +8,16 @@ CRGBPalette16 currentPalette;
 uint8_t currentPaletteIndex = 0;
 TBlendType    currentBlending;
 
-void SetupBlackAndWhiteStripedPalette()
+void SetupAmericaPalette()
 {
-	// 'black out' all 16 palette entries...
-	fill_solid( currentPalette, 16, CRGB::Black);
+	fill_solid( currentPalette, 16, CRGB::Red);
 	// and set every fourth one to white.
 	currentPalette[0] = CRGB::White;
+	currentPalette[2] = CRGB::Blue;
 	currentPalette[4] = CRGB::White;
+	currentPalette[6] = CRGB::Blue;
 	currentPalette[8] = CRGB::White;
+	currentPalette[10] = CRGB::Blue;
 	currentPalette[12] = CRGB::White;
 }
 
@@ -181,7 +183,7 @@ void selectPalette(uint8_t index)
     case 0: { currentPalette = myRastaPalette_p; currentBlending = LINEARBLEND; } break;
 		case 1: { SetupPurpleAndGreenPalette(); currentBlending = LINEARBLEND; }break;
 		case 2: { currentPalette = myRedBluePalette_p; currentBlending = LINEARBLEND; }break;
-		case 3: { SetupBlackAndWhiteStripedPalette(); currentBlending = LINEARBLEND; }break;
+		case 3: { SetupAmericaPalette(); currentBlending = LINEARBLEND; }break;
 		case 4: { currentPalette = myFirePalette_p; currentBlending = LINEARBLEND; }break;
 		case 5: { SetupPurplePalette(); currentBlending = LINEARBLEND; }break;
 		case 6: { currentPalette = CloudColors_p; currentBlending = LINEARBLEND; }break;
@@ -196,7 +198,7 @@ void selectPalette(uint8_t index)
 }                          
 }
 
-void ChangePalettePeriodically(bool isRandom = false)
+void ChangePalettePeriodically(bool isRandom = true)
 {
 	if (isAutoPaletteCycle)
 	{

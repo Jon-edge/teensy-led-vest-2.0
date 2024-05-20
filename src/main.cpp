@@ -12,20 +12,39 @@ const uint8_t ledPin = LED_BUILTIN; // the number of the onboard LED pin
 uint8_t gHue = 0; // rotating "base color" used by many of the patterns
 
 // Mode & Palette
+bool isOff = false;
+
 bool isAutoModeCycle = false;
-bool isAutoPaletteCycle = false;
+bool isAutoPaletteCycle = true;
+
+bool isStrobeEnabled = false;
+bool isStrobeHide = false;
+int strobeInterval = 0;
+int strobeShowDuration = 10;
+
+// Alt Modes
+bool isPaletteMode = false;
 
 enum Mode
 {
     MODE_CIRCLE_WAVE_RAINBOW,
+    MODE_CIRCLE_WAVE,
     MODE_ROTATING_RAINBOW,
-    MODE_CHASERS,
-    MODE_TWINKLE,
+    MODE_SQUARE_WAVE_RAINBOW,
+    MODE_SQUARE_WAVE,
+    // MODE_METEOR_RAINBOW, // dead
+    // MODE_METEOR, // dead
+    MODE_SINE_SPIN,
+    MODE_SINE_HOR,
+    MODE_SINE_VERT,
+
+    MODE_STATIC, // sparkle without clearing
     MODE_SPARKLE,
+    MODE_TWINKLE,
+    MODE_CHASERS,
     MODE_COUNT // This helps to know the count of modes
 };
-Mode MODE = MODE_CIRCLE_WAVE_RAINBOW;
-
+Mode MODE = MODE_SINE_SPIN;
 
 // Variables to track IR command repeats
 uint32_t lastIrCode = 0;
@@ -36,7 +55,15 @@ bool newSignal = false;
 
 // Animation specific:
 volatile int animationSpeed = INITIAL_SPEED; // Animation delay in milliseconds, start with initial speed
+float rotationAngle = 0.0;
+
+// Overlays:
+bool isDrawHeart = false;
+bool isDrawFace = false;
+
+// legacy
 static uint8_t lgcyColorIndex = 0;
+bool effectInit = false;
 
 void setup()
 {
@@ -59,7 +86,7 @@ void setup()
     IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Start the IR receiver
     Serial.println(F("\n\nIR Receiver and FastLED are initialized."));
 
-    selectPalette(11);
+    selectPalette(1);
 }
 
 void loop()
@@ -69,10 +96,12 @@ void loop()
     // Handle IR signals
     if (IrReceiver.decode())
     {
-        newSignal = true;
         uint32_t code = IrReceiver.decodedIRData.decodedRawData;
 
-        if (code != 0) {
+        // Filter out invalid codes and handle new signals
+        if (code != 0xFFFFFFFF && code != 0) {
+            newSignal = true;
+            
             if (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)
             {
                 int repeatMs = ms - lastIrTime;
@@ -82,7 +111,7 @@ void loop()
             else
             {
                 Serial.print(F("Received new IR signal: 0x"));
-                Serial.println(code);
+                Serial.println(code, HEX);
 
                 lastIrCode = code;
                 repeatCount = 0;
@@ -100,230 +129,306 @@ void loop()
         if (newSignal && ms - lastIrTime > repeatTimeout) {
             newSignal = false;
             // We're sure this is the press meaning
-            handleIrSignal(lastIrCode, repeatCount);
+            handleIrSignal(lastIrCode); // , repeatCount); TODO: broken somehow
             repeatCount = 0;
             lastIrTime = 0;
             lastIrCode = 0;
         }
 
+        renderMode(ms);
+    }
+
+    if (isStrobeHide || isOff) {
+        FastLED.setBrightness(0);
+    } else {
         BRIGHTNESS = brightness[brightnessIndex];
         FastLED.setBrightness(BRIGHTNESS);
+    }
+    FastLED.show();
+}
 
-        switch (MODE)
-        {
+unsigned long lastStrobe = 0;
+
+void renderMode(unsigned long ms) {
+    // Globals
+    rotationAngle+= 0.25;
+    if (rotationAngle >= 360) {
+        rotationAngle = 0;
+    }
+    
+    if (isAutoModeCycle)
+	{
+		EVERY_N_SECONDS(10)
+		{
+			MODE = static_cast<Mode>(random(MODE_COUNT));
+			effectInit = false;
+			Serial.print("(AUTOCYCLE) Entering mode ");
+			Serial.println(MODE);
+		}
+	}
+
+    if (isAutoPaletteCycle)
+    {
+        EVERY_N_SECONDS(5) {
+            ChangePalettePeriodically(true);
+            selectPalette(currentPaletteIndex);
+        }
+    }
+
+    if (isStrobeEnabled) {
+        if (isStrobeHide) {
+            if (ms - lastStrobe >= strobeInterval * 10) {
+                isStrobeHide = false;
+                lastStrobe = ms; // Reset the timer for the show state
+            }
+        } else {
+            if (ms - lastStrobe >= strobeShowDuration) {
+                isStrobeHide = true;
+                lastStrobe = ms; // Reset the timer for the hide state
+            }
+        }
+    } else {
+        isStrobeHide = false;
+        isStrobeEnabled = false;
+        strobeInterval = 0;
+    }
+
+    if (isStrobeHide) {
+        FastLED.setBrightness(0);
+    } else {
+        BRIGHTNESS = brightness[brightnessIndex];
+        FastLED.setBrightness(BRIGHTNESS);
+    }
+
+    switch (MODE)
+    {
         case MODE_CIRCLE_WAVE_RAINBOW: circleWaveRainbow(); break;
-        break;
+        case MODE_CIRCLE_WAVE: circleWavePalette(); break;
         case MODE_ROTATING_RAINBOW: {
             int32_t yHueDelta32 = ((int32_t)sin16(ms * (27 / 1)) * (350 / LED_WIDTH));
             int32_t xHueDelta32 = ((int32_t)sin16(ms * (39 / 1)) * (310 / LED_HEIGHT));
             RotatingRainbow(ms / 65536, yHueDelta32 / 32768, xHueDelta32 / 32768);
         } break;
+        case MODE_SQUARE_WAVE_RAINBOW: {
+            squareWaveRainbow(rotationAngle);
+        } break;
+        case MODE_SQUARE_WAVE: {
+            squareWavePalette(rotationAngle);
+        } break;
         case MODE_CHASERS: {
-            EVERY_N_MILLISECONDS(animationSpeed)
+            EVERY_N_MILLISECONDS(animationSpeed/2)
             {
                 lgcyColorIndex = lgcyColorIndex + 1; /* motion speed */
             }
             FillLEDsFromPaletteColors(lgcyColorIndex);
         } break;
         case MODE_TWINKLE: colortwinkles(animationSpeed); break;
-        case MODE_SPARKLE: sparkle(10, lgcyColorIndex); break;
+        case MODE_STATIC: {sparkle(20, lgcyColorIndex);} break;
+        case MODE_SPARKLE: {clearLeds(); sparkle(20, lgcyColorIndex);} break;
+        // case MODE_METEOR_RAINBOW: meteor(ms, 10, 10, true); break;
+
+
+        // case MODE_METEOR: meteor(ms, 5, 5, 90, 10, 10, false); break;
+        case MODE_SINE_SPIN: EVERY_N_MILLISECONDS(50) {clearLeds(); threeSine(rotationAngle, 8, 9, 10, 6.5, 7.5);} break;
+        case MODE_SINE_HOR: EVERY_N_MILLISECONDS(50) {threeSineOg(false, 8, 9, 10, 6.5, 7.5);} break;
+        case MODE_SINE_VERT: EVERY_N_MILLISECONDS(50) {threeSineOg(true, 8, 9, 10, 6.5, 7.5);} break;
         case MODE_COUNT: MODE=MODE_CIRCLE_WAVE_RAINBOW; break;
-        }
+        default: 
+            MODE=MODE_CIRCLE_WAVE_RAINBOW;
+            break;
     }
 
-    FastLED.show();
+    // Overlays:
+    if (isDrawFace) {
+        CRGB textColor = CRGB::White;
+        if (MODE != MODE_CIRCLE_WAVE_RAINBOW && MODE != MODE_ROTATING_RAINBOW && MODE != MODE_SQUARE_WAVE_RAINBOW) {
+            if ((currentPalette[0].r == currentPalette[0].g == currentPalette[0].b > 200) &&
+                (currentPalette[4].r == currentPalette[4].g == currentPalette[4].b > 200) &&
+                (currentPalette[8].r == currentPalette[8].g == currentPalette[8].b > 200) &&
+                (currentPalette[12].r == currentPalette[12].g == currentPalette[12].b > 200)) {
+                textColor = CRGB::Red;
+            }
+        }
+        drawFace(textColor, 100);
+    } else if (isDrawHeart) {
+        CRGB heartColor = CRGB::White;
+        if (MODE != MODE_CIRCLE_WAVE_RAINBOW && MODE != MODE_ROTATING_RAINBOW && MODE != MODE_SQUARE_WAVE_RAINBOW) {
+            EVERY_N_MILLISECONDS(5)
+            {
+                switch (random8(0, 7))
+                {
+					case 0:
+						heartColor = CRGB::White;
+						break;
+					case 1:
+						heartColor = CRGB::Red;
+						break;
+					case 2:
+						heartColor = CRGB::Pink;
+						break;
+					case 3:
+						heartColor = CRGB::Red;
+						break;
+					case 4:
+						heartColor = CRGB::Red;
+						break;
+					case 5:
+						heartColor = CRGB::Pink;
+						break;
+					case 6:
+						heartColor = CRGB::Red;
+						break;
+					case 7:
+						heartColor = CRGB::Red;
+						break;
+                }
+            }
+        }
+        drawHeart(heartColor, 200);
+    }
 }
 
-void handleIrSignal(uint32_t code, int repeats)
+void handleIrSignal(uint32_t code)
 {
-    if (repeats >= 3)
+    if (isPaletteMode)
     {
-        Serial.println("Handling repeat code: " + String(code));
-        // Handle the command differently if it's repeated 3 times
-        switch (code)
-        {
-        case RED_0:
-            // Add custom handling here for repeated RED_0
-            Serial.println(F("Handling RED_0 repeated 3 times"));
-            break;
-        case RED_1:
-            // Add custom handling here for repeated RED_1
-            Serial.println(F("Handling RED_1 repeated 3 times"));
-            break;
-        case ORANGE_0:
-            // Add custom handling here for repeated ORANGE_0
-            Serial.println(F("Handling ORANGE_0 repeated 3 times"));
-            break;
-        case ORANGE_1:
-            // Add custom handling here for repeated ORANGE_1
-            Serial.println(F("Handling ORANGE_1 repeated 3 times"));
-            break;
-        case YELLOW:
-            // Add custom handling here for repeated YELLOW
-            Serial.println(F("Handling YELLOW repeated 3 times"));
-            break;
-        case GREEN_0:
-            // Add custom handling here for repeated GREEN_0
-            Serial.println(F("Handling GREEN_0 repeated 3 times"));
-            break;
-        case GREEN_1:
-            // Add custom handling here for repeated GREEN_1
-            Serial.println(F("Handling GREEN_1 repeated 3 times"));
-            break;
-        case TEAL_0:
-            // Add custom handling here for repeated TEAL_0
-            Serial.println(F("Handling TEAL_0 repeated 3 times"));
-            break;
-        case TEAL_1:
-            // Add custom handling here for repeated TEAL_1
-            Serial.println(F("Handling TEAL_1 repeated 3 times"));
-            break;
-        case TEAL_2:
-            // Add custom handling here for repeated TEAL_2
-            Serial.println(F("Handling TEAL_2 repeated 3 times"));
-            break;
-        case BLUE_0:
-            // Add custom handling here for repeated BLUE_0
-            Serial.println(F("Handling BLUE_0 repeated 3 times"));
-            break;
-        case BLUE_1:
-            // Add custom handling here for repeated BLUE_1
-            Serial.println(F("Handling BLUE_1 repeated 3 times"));
-            break;
-        case PURP_0:
-            // Add custom handling here for repeated PURP_0
-            Serial.println(F("Handling PURP_0 repeated 3 times"));
-            break;
-        case PURP_1:
-            // Add custom handling here for repeated PURP_1
-            Serial.println(F("Handling PURP_1 repeated 3 times"));
-            break;
-        case PINK:
-            // Add custom handling here for repeated PINK
-            Serial.println(F("Handling PINK repeated 3 times"));
-            break;
-        case WHITE:
-            // Add custom handling here for repeated WHITE
-            Serial.println(F("Handling WHITE repeated 3 times"));
-            break;
-        case BRT_UP:
-            // Add custom handling here for repeated BRT_UP
-            Serial.println(F("Handling BRT_UP repeated 3 times"));
-            break;
-        case BRT_DOWNN:
-            // Add custom handling here for repeated BRT_DOWNN
-            Serial.println(F("Handling BRT_DOWNN repeated 3 times"));
-            break;
-        case OFF:
-            // Add custom handling here for repeated OFF
-            Serial.println(F("Handling OFF repeated 3 times"));
-            break;
-        case ON:
-            // Add custom handling here for repeated ON
-            Serial.println(F("Handling ON repeated 3 times"));
-            break;
-        case FLASH:
-            // Add custom handling here for repeated FLASH
-            Serial.println(F("Handling FLASH repeated 3 times"));
-            break;
-        case STROBE:
-            // Add custom handling here for repeated STROBE
-            Serial.println(F("Handling STROBE repeated 3 times"));
-            break;
-        case FADE:
-            // Add custom handling here for repeated FADE
-            Serial.println(F("Handling FADE repeated 3 times"));
-            break;
-        case SMOOTH:
-            // Add custom handling here for repeated SMOOTH
-            Serial.println(F("Handling SMOOTH repeated 3 times"));
-            break;
+        Serial.print(F("Repeated IR signal: 0x"));
+        // Handle the command differently if it's repeated
+        switch (code) {
+            case RED_0:    selectPalette(0); break;
+            case RED_1:    selectPalette(1); break;
+            case ORANGE_0: selectPalette(2); break;
+            case ORANGE_1: selectPalette(3);break;
+            case YELLOW:   selectPalette(4); break;
+
+            case GREEN_0:  selectPalette(5); break;
+            case GREEN_1:  selectPalette(6); break;
+            case TEAL_0:   selectPalette(7); break;
+            case TEAL_1:   selectPalette(8); break;
+            case TEAL_2:   selectPalette(9); break;
+
+            case BLUE_0:   selectPalette(10); break;
+            case BLUE_1:   selectPalette(11);break;
+            case PURP_0:   selectPalette(12);break;
+            case PURP_1:   selectPalette(13);break;
+            case PINK:     selectPalette(14); break;
+
+            case WHITE:    selectPalette(15); break;
+
+            case BRT_UP: break;
+            case BRT_DOWNN: break;
+            
+            case OFF: isPaletteMode = false; break;
+            case ON: break;
+
+            case FLASH: strobeShowDuration++; break;
+            case STROBE: strobeShowDuration--; break;
+            case FADE: {
+                isOff = !isOff;
+            } break;
+            case SMOOTH: {
+
+            }break;
         }
     }
     else
     {
         // Handle each color command based on the received IR signal
-        Serial.println("Handling normal code: " + String(code));
-        switch (code)
-        {
-        case RED_0:
-            MODE = MODE_ROTATING_RAINBOW;
-            break;
-        case RED_1:
-            MODE = MODE_CIRCLE_WAVE_RAINBOW;
-            break;
-        case ORANGE_0:
-            MODE = MODE_CHASERS;
-            break;
-        case ORANGE_1:
-            MODE = MODE_TWINKLE;
-            break;
-        case YELLOW:
-            leds[4] = CRGB::Yellow;
-            break;
-        case GREEN_0:
-            leds[5] = CRGB::Green;
-            break;
-        case GREEN_1:
-            leds[6] = CRGB::Green;
-            break;
-        case TEAL_0:
-            leds[7] = CRGB::Teal;
-            break;
-        case TEAL_1:
-            leds[8] = CRGB::Teal;
-            break;
-        case TEAL_2:
-            leds[9] = CRGB::Teal;
-            break;
-        case BLUE_0:
-            leds[0] = CRGB::Blue;
-            break;
-        case BLUE_1:
-            leds[1] = CRGB::Blue;
-            break;
-        case PURP_0:
-            leds[2] = CRGB::Purple;
-            break;
-        case PURP_1:
-            leds[3] = CRGB::Purple;
-            break;
-        case PINK:
-            leds[4] = CRGB::Pink;
-            break;
-        case WHITE:
-            leds[5] = CRGB::White;
-            break;
-        case BRT_UP:
-            if (brightnessIndex < 8) {
-                brightnessIndex++; 
-                Serial.println("Brightness " + String(brightnessIndex));
-            }
-            break;
-        case BRT_DOWNN:
-            if (brightnessIndex > 0){
-                brightnessIndex--;
-                Serial.println("Brightness " + String(brightnessIndex));
-            }
-            break;
-        case OFF:
-            MODE = MODE_COUNT;
-            break;
-        case ON:
-            MODE = MODE_CIRCLE_WAVE_RAINBOW;
-            break;
-        case FLASH:
-            animationSpeed = 100;
-            break;
-        case STROBE:
-            animationSpeed = 10;
-            break;
-        case FADE:
-            animationSpeed = 1000;
-            break;
-        case SMOOTH:
-            animationSpeed = 100;
-            break;
+        switch (code) {
+            case RED_0:    MODE = MODE_ROTATING_RAINBOW; break;
+            case RED_1:    MODE = MODE_CIRCLE_WAVE_RAINBOW; break;
+            case ORANGE_0: MODE = MODE_SQUARE_WAVE_RAINBOW; break;
+            case ORANGE_1: MODE = MODE_CHASERS; break;
+            case YELLOW:   MODE = MODE_SINE_SPIN; break;
+
+            case GREEN_0:  MODE = MODE_STATIC; break;
+            case GREEN_1:  MODE = MODE_CIRCLE_WAVE; break;
+            case TEAL_0:   MODE = MODE_SQUARE_WAVE; break;
+            case TEAL_1:   MODE = MODE_TWINKLE; break;
+            case TEAL_2:   MODE = MODE_SINE_HOR; break;
+
+            case BLUE_0:   MODE = MODE_SPARKLE; break;
+            case BLUE_1:   break;
+            case PURP_0:   {
+                isDrawHeart = false;
+                isDrawFace = !isDrawFace;
+
+                if (isDrawFace) {
+                    fillLeds(CRGB::Blue);
+                    FastLED.show();
+                }
+                else {
+                    fillLeds(CRGB::Red);
+                    FastLED.show();
+                }                    
+                delay(500);
+                clearLeds(); 
+
+            }break;
+            case PURP_1:{
+                isDrawFace = false;
+                isDrawHeart = !isDrawHeart;
+
+                if (isDrawHeart) {
+                    fillLeds(CRGB::Pink);
+                    FastLED.show();
+                }
+                else {
+                    fillLeds(CRGB::Red);
+                    FastLED.show();
+                }                    
+                delay(500);
+                clearLeds(); 
+            }   break;
+            case PINK:     MODE = MODE_SINE_VERT; break;
+
+            case WHITE:    MODE = MODE_TWINKLE; break;
+
+            case BRT_UP: if (brightnessIndex < 8) { brightnessIndex++; } break;
+            case BRT_DOWNN: if (brightnessIndex > 0) { brightnessIndex--; } break;
+            
+            case OFF: isStrobeEnabled = false; isStrobeHide = false; break;
+            case ON: isPaletteMode = true; break;
+
+            case FLASH: {
+                isStrobeEnabled = true; 
+                strobeInterval++;
+                Serial.println(String(isStrobeEnabled));
+                Serial.println(String(strobeInterval));
+             } break;
+            case STROBE: {
+                isStrobeEnabled = true;
+                if (strobeInterval >= 2) strobeInterval--; 
+
+                Serial.println(String(isStrobeEnabled));
+                Serial.println(String(strobeInterval));
+            }break;
+            case FADE: {
+                isAutoModeCycle = !isAutoModeCycle;
+                if (isAutoModeCycle) {
+                    fillLeds(CRGB::Green);
+                    FastLED.show();
+                }
+                else {
+                    fillLeds(CRGB::Red);
+                    FastLED.show();
+                }                    
+                delay(500);
+                clearLeds(); 
+            } break;
+            case SMOOTH: {
+                isAutoPaletteCycle = !isAutoPaletteCycle; 
+                if (isAutoPaletteCycle) {
+                    fillLeds(CRGB::Teal);
+                    FastLED.show();
+                }
+                else {
+                    fillLeds(CRGB::Purple);
+                    FastLED.show();
+                }                    
+                delay(500);
+                clearLeds(); 
+            }break;
         }
     }
 }

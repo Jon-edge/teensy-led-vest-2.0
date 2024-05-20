@@ -43,4 +43,8 @@ extern bool isAutoPaletteCycle;
 // set pin numbers:
 extern const uint8_t ledPin;      // the number of the onboard LED pin
 
-void handleIrSignal(uint32_t code, int repeats);
+extern bool effectInit;
+
+void handleIrSignal(uint32_t code);
+
+void renderMode(unsigned long ms);
